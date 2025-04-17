@@ -206,25 +206,28 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                               icon: const Icon(Icons.photo_library, size: 32),
                               onPressed: _pickImage,
                             ),
-                            Container(
-                              height: 75,
-                              width: 75,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                                border: Border.all(color: Colors.white, width: 4),
-                              ),
-                              child: Center(
-                                child: Container(
-                                  height: 55,
-                                  width: 55,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(0xFF5DCCFC),
+                            GestureDetector(
+                              onTap: takePicture,
+                              child: Container(
+                                height: 80,
+                                width: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFF5DCCFC), width: 5),
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    height: 60,
+                                    width: 60,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Color(0xFF5DCCFC),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
+
                             IconButton(
                               icon: const Icon(Icons.flip_camera_ios, size: 32),
                               onPressed: _switchCamera,
