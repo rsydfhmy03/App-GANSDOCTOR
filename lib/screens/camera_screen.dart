@@ -1,5 +1,3 @@
-// Refactored CameraScreen with flash toggle, better layout & design sync
-
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
@@ -113,6 +111,53 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     }
   }
 
+  Widget buildProcessButton() {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.95),
+      onTapUp: (_) {
+        setState(() => _scale = 1.0);
+        _processImage();
+      },
+      onTapCancel: () => setState(() => _scale = 1.0),
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF5DCCFC),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF5DCCFC).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.auto_awesome, color: Colors.white),
+              SizedBox(width: 8),
+              Text(
+                "Proses Gambar",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _scale = 1.0;
+
   @override
   Widget build(BuildContext context) {
     if (!isCameraReady || controller == null) {
@@ -161,15 +206,22 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                               icon: const Icon(Icons.photo_library, size: 32),
                               onPressed: _pickImage,
                             ),
-                            GestureDetector(
-                              onTap: takePicture,
-                              child: Container(
-                                height: 75,
-                                width: 75,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF5DCCFC),
-                                  border: Border.all(color: Colors.white, width: 4),
+                            Container(
+                              height: 75,
+                              width: 75,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.transparent,
+                                border: Border.all(color: Colors.white, width: 4),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  height: 55,
+                                  width: 55,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Color(0xFF5DCCFC),
+                                  ),
                                 ),
                               ),
                             ),
@@ -179,7 +231,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                             ),
                           ]
                         : [
-                            ElevatedButton(
+                            // buildProcessButton(),
+                                                        ElevatedButton(
                               onPressed: _processImage,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF5DCCFC),
@@ -198,9 +251,22 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             Positioned(
               top: 16,
               left: 16,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.blue, size: 28),
-                onPressed: () => Navigator.pop(context),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5DCCFC),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF5DCCFC).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ),
             ),
             Positioned(

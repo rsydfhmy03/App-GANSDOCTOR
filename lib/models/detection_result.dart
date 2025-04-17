@@ -1,18 +1,18 @@
 // lib/models/detection_result.dart
 
 class DetectionResult {
+  final int statusCode;
+  final String message;
   final String label;
   final double confidence;
   final Map<String, double> probabilities;
-  final String message;
-  final int statusCode;
 
   DetectionResult({
+    required this.statusCode,
+    required this.message,
     required this.label,
     required this.confidence,
     required this.probabilities,
-    required this.message,
-    required this.statusCode,
   });
 
   factory DetectionResult.fromJson(Map<String, dynamic> json) {
@@ -24,11 +24,11 @@ class DetectionResult {
     });
 
     return DetectionResult(
+      statusCode: json['statusCode'],
+      message: json['message'],
       label: data['label'],
       confidence: data['confidence'] is double ? data['confidence'] : (data['confidence'] as num).toDouble(),
       probabilities: probs,
-      message: json['message'],
-      statusCode: json['statusCode'],
     );
   }
 }
