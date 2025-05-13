@@ -5,6 +5,7 @@ class DetectionResult {
   final String message;
   final String label;
   final double confidence;
+  final String imageUrl;
   final Map<String, double> probabilities;
 
   DetectionResult({
@@ -12,6 +13,7 @@ class DetectionResult {
     required this.message,
     required this.label,
     required this.confidence,
+    required this.imageUrl,
     required this.probabilities,
   });
 
@@ -28,6 +30,7 @@ class DetectionResult {
       message: json['message'],
       label: data['label'],
       confidence: data['confidence'] is double ? data['confidence'] : (data['confidence'] as num).toDouble(),
+      imageUrl: data['image_url'] ?? '',
       probabilities: probs,
     );
   }

@@ -16,11 +16,28 @@ class DetectionService {
       logPrint: (obj) => print('[DIO] $obj'),
     ));
 
+  /// Deteksi wajah dengan metode CNN standar (tanpa LBP)
   Future<DetectionResult> detectFace(File imageFile) async {
+    return _uploadImageAndDetect(
+      imageFile,
+      '${ApiConfig.baseUrl}/api/v1/detect',
+    );
+  }
+
+  /// Deteksi wajah dengan metode LBP + CNN
+  Future<DetectionResult> detectFaceLBP(File imageFile) async {
+    return _uploadImageAndDetect(
+      imageFile,
+      '${ApiConfig.baseUrl}/api/v1/detectLBP',
+    );
+  }
+
+  /// Method private yang digunakan untuk mengirim request ke endpoint
+  Future<DetectionResult> _uploadImageAndDetect(File imageFile, String url) async {
     try {
       String fileName = imageFile.path.split('/').last;
-
       print('[DETECT] Preparing image: $fileName');
+      print('[DETECT] Using endpoint: $url');
 
       FormData formData = FormData.fromMap({
         "file": await MultipartFile.fromFile(
@@ -30,7 +47,7 @@ class DetectionService {
       });
 
       final response = await _dio.post(
-        '${ApiConfig.baseUrl}/api/v1/detect',
+        url,
         data: formData,
         options: Options(
           headers: {

@@ -10,12 +10,12 @@ import 'package:gansdoctor/widgets/circular_progress_indicator.dart';
 import 'package:gansdoctor/widgets/custom_button.dart';
 
 class ResultScreen extends StatelessWidget {
-  final File imageFile;
+  // final File imageFile;
   final DetectionResult result;
 
   const ResultScreen({
     Key? key,
-    required this.imageFile,
+    // required this.imageFile,
     required this.result,
   }) : super(key: key);
 
@@ -26,9 +26,7 @@ class ResultScreen extends StatelessWidget {
     final description = Helpers.getDescriptionForLabel(result.label);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppStrings.result),
-      ),
+      appBar: AppBar(title: const Text(AppStrings.result)),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -49,19 +47,40 @@ class ResultScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  //   child: ClipRRect(
+                  //     borderRadius: BorderRadius.circular(20),
+                  //     child: Image.network(
+                  //       result.imageUrl,
+                  //       fit: BoxFit.cover,
+                  //     ),
+                  //   ),
+                  // ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Image.file(
-                      imageFile,
+                    child: Image.network(
+                      result.imageUrl,
                       fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(
+                          child: Icon(Icons.broken_image, size: 80),
+                        );
+                      },
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 30),
 
                 // Result Title
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(30),
@@ -137,8 +156,9 @@ class ResultScreen extends StatelessWidget {
                       const SizedBox(height: 15),
                       ...result.probabilities.entries.map((entry) {
                         final isRealLabel = entry.key == 'REAL';
-                        final entryColor = isRealLabel ? AppColors.real : AppColors.fake;
-                        
+                        final entryColor =
+                            isRealLabel ? AppColors.real : AppColors.fake;
+
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Row(
@@ -152,7 +172,9 @@ class ResultScreen extends StatelessWidget {
                                 ),
                                 child: Center(
                                   child: Icon(
-                                    isRealLabel ? Icons.check_circle : Icons.cancel,
+                                    isRealLabel
+                                        ? Icons.check_circle
+                                        : Icons.cancel,
                                     color: entryColor,
                                   ),
                                 ),

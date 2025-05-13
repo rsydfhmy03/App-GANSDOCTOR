@@ -3,26 +3,27 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:gansdoctor/screens/result_screen.dart';
 import 'package:gansdoctor/services/detection_service.dart';
-import 'package:gansdoctor/utils/helpers.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:gansdoctor/widgets/custom_alert_dialog.dart';
+import 'package:gansdoctor/widgets/custom_loading_dialog.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({Key? key}) : super(key: key);
-
+  final bool useLBP;
+  const CameraScreen({Key? key, required this.useLBP}) : super(key: key);
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver {
   List<CameraDescription>? cameras;
   CameraController? controller;
   bool isCameraReady = false;
   bool isRearCameraSelected = false;
   bool flashEnabled = false;
   File? imageFile;
-
   final ImagePicker _picker = ImagePicker();
   final DetectionService detectionService = DetectionService();
 
@@ -34,29 +35,43 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   Future<void> initializeCamera() async {
-    cameras = await availableCameras();
-    if (cameras != null && cameras!.isNotEmpty) {
-      int selectedCamera = cameras!.indexWhere((c) => c.lensDirection == CameraLensDirection.front);
-      if (selectedCamera == -1) selectedCamera = 0;
-      await onNewCameraSelected(cameras![selectedCamera]);
+    try {
+      cameras = await availableCameras();
+      if (cameras != null && cameras!.isNotEmpty) {
+        int selectedCamera = cameras!.indexWhere(
+          (c) => c.lensDirection == CameraLensDirection.front,
+        );
+        if (selectedCamera == -1) selectedCamera = 0;
+        await onNewCameraSelected(cameras![selectedCamera]);
+      }
+    } catch (e) {
+      CustomAlertDialog.show(
+        context: context,
+        title: "Camera Error",
+        message: "Gagal mengakses kamera: $e",
+      );
     }
   }
 
   Future<void> onNewCameraSelected(CameraDescription cameraDescription) async {
-    if (controller != null) await controller!.dispose();
-
-    controller = CameraController(
-      cameraDescription,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-
     try {
+      if (controller != null) await controller!.dispose();
+
+      controller = CameraController(
+        cameraDescription,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
+
       await controller!.initialize();
       setState(() => isCameraReady = true);
     } catch (e) {
-      Helpers.showSnackBar(context, 'Camera error: $e');
+      CustomAlertDialog.show(
+        context: context,
+        title: "Gagal Inisialisasi",
+        message: "Kamera tidak bisa digunakan: $e",
+      );
     }
   }
 
@@ -67,12 +82,17 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     setState(() {});
   }
 
-  void _switchCamera() async {
+  Future<void> _switchCamera() async {
     if (cameras == null || cameras!.isEmpty) return;
     isRearCameraSelected = !isRearCameraSelected;
-    int selected = isRearCameraSelected
-        ? cameras!.indexWhere((c) => c.lensDirection == CameraLensDirection.back)
-        : cameras!.indexWhere((c) => c.lensDirection == CameraLensDirection.front);
+    int selected =
+        isRearCameraSelected
+            ? cameras!.indexWhere(
+              (c) => c.lensDirection == CameraLensDirection.back,
+            )
+            : cameras!.indexWhere(
+              (c) => c.lensDirection == CameraLensDirection.front,
+            );
     if (selected == -1) selected = 0;
     await onNewCameraSelected(cameras![selected]);
   }
@@ -83,87 +103,81 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       final file = await controller!.takePicture();
       setState(() => imageFile = File(file.path));
     } catch (e) {
-      Helpers.showSnackBar(context, 'Failed to take picture: $e');
+      CustomAlertDialog.show(
+        context: context,
+        title: "Gagal",
+        message: "Gagal mengambil gambar: $e",
+      );
     }
   }
 
   Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => imageFile = File(picked.path));
-  }
-
-  Future<void> _processImage() async {
-    if (imageFile == null) return;
-    Helpers.showLoadingDialog(context);
     try {
-      final result = await detectionService.detectFace(imageFile!);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ResultScreen(imageFile: imageFile!, result: result),
-        ),
-      );
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        setState(() => imageFile = File(picked.path));
+      }
     } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      Helpers.showSnackBar(context, 'Detection failed: $e');
+      CustomAlertDialog.show(
+        context: context,
+        title: "Galeri Error",
+        message: "Gagal mengambil gambar dari galeri: $e",
+      );
     }
   }
 
-  Widget buildProcessButton() {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _scale = 0.95),
-      onTapUp: (_) {
-        setState(() => _scale = 1.0);
-        _processImage();
-      },
-      onTapCancel: () => setState(() => _scale = 1.0),
-      child: AnimatedScale(
-        scale: _scale,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF5DCCFC),
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5DCCFC).withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.auto_awesome, color: Colors.white),
-              SizedBox(width: 8),
-              Text(
-                "Proses Gambar",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // Future<void> _processImage() async {
+  //   if (imageFile == null) return;
 
-  double _scale = 1.0;
+  //   CustomLoadingDialog.show(context);
+  //   try {
+  //     final result = await detectionService.detectFace(imageFile!);
+  //     if (!mounted) return;
+  //     CustomLoadingDialog.hide(context);
+  //     Navigator.of(
+  //       context,
+  //     ).push(MaterialPageRoute(builder: (_) => ResultScreen(result: result)));
+  //   } catch (e) {
+  //     if (!mounted) return;
+  //     CustomLoadingDialog.hide(context);
+  //     CustomAlertDialog.show(
+  //       context: context,
+  //       title: "Error",
+  //       message: "Proses deteksi gagal dilakukan",
+  //     );
+  //   }
+  // }
+  Future<void> _processImage() async {
+    if (imageFile == null) return;
+
+    CustomLoadingDialog.show(context);
+    try {
+      final result =
+          widget.useLBP
+              ? await detectionService.detectFaceLBP(imageFile!)
+              : await detectionService.detectFace(imageFile!);
+
+      if (!mounted) return;
+      CustomLoadingDialog.hide(context);
+
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => ResultScreen(result: result)));
+    } catch (e) {
+      if (!mounted) return;
+      CustomLoadingDialog.hide(context);
+      CustomAlertDialog.show(
+        context: context,
+        title: "Error",
+        message: "Proses deteksi gagal dilakukan: $e",
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!isCameraReady || controller == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -178,21 +192,32 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     padding: const EdgeInsets.all(12),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: imageFile == null
-                          ? CameraPreview(controller!)
-                          : Stack(
-                              children: [
-                                Image.file(imageFile!, fit: BoxFit.cover, width: double.infinity),
-                                Positioned(
-                                  top: 16,
-                                  right: 16,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                                    onPressed: () => setState(() => imageFile = null),
+                      child:
+                          imageFile == null
+                              ? CameraPreview(controller!)
+                              : Stack(
+                                children: [
+                                  Image.file(
+                                    imageFile!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
                                   ),
-                                )
-                              ],
-                            ),
+                                  Positioned(
+                                    top: 16,
+                                    right: 16,
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 28,
+                                      ),
+                                      onPressed:
+                                          () =>
+                                              setState(() => imageFile = null),
+                                    ),
+                                  ),
+                                ],
+                              ),
                     ),
                   ),
                 ),
@@ -200,53 +225,64 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: imageFile == null
-                        ? [
-                            IconButton(
-                              icon: const Icon(Icons.photo_library, size: 32),
-                              onPressed: _pickImage,
-                            ),
-                            GestureDetector(
-                              onTap: takePicture,
-                              child: Container(
-                                height: 80,
-                                width: 80,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF5DCCFC), width: 5),
-                                ),
-                                child: Center(
-                                  child: Container(
-                                    height: 60,
-                                    width: 60,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Color(0xFF5DCCFC),
+                    children:
+                        imageFile == null
+                            ? [
+                              IconButton(
+                                icon: const Icon(Icons.photo_library, size: 32),
+                                onPressed: _pickImage,
+                              ),
+                              GestureDetector(
+                                onTap: takePicture,
+                                child: Container(
+                                  height: 80,
+                                  width: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFF5DCCFC),
+                                      width: 5,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      height: 60,
+                                      width: 60,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(0xFF5DCCFC),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-
-                            IconButton(
-                              icon: const Icon(Icons.flip_camera_ios, size: 32),
-                              onPressed: _switchCamera,
-                            ),
-                          ]
-                        : [
-                            // buildProcessButton(),
-                                                        ElevatedButton(
-                              onPressed: _processImage,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF5DCCFC),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.flip_camera_ios,
+                                  size: 32,
                                 ),
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                onPressed: _switchCamera,
                               ),
-                              child: Text('Proses Gambar', style: GoogleFonts.poppins(fontSize: 16)),
-                            ),
-                          ],
+                            ]
+                            : [
+                              ElevatedButton(
+                                onPressed: _processImage,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF5DCCFC),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 16,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Proses Gambar',
+                                  style: GoogleFonts.poppins(fontSize: 16),
+                                ),
+                              ),
+                            ],
                   ),
                 ),
               ],
@@ -263,7 +299,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       color: const Color(0xFF5DCCFC).withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
-                    )
+                    ),
                   ],
                 ),
                 child: IconButton(

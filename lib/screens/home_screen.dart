@@ -96,7 +96,7 @@ class HomeScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const CameraScreen()),
+                    MaterialPageRoute(builder: (_) => const CameraScreen(useLBP: false,)),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -135,7 +135,7 @@ class HomeScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const CameraScreen(),
+                            builder: (_) => const CameraScreen( useLBP: false,),
                           ),
                         );
                       },
@@ -163,7 +163,14 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CameraScreen( useLBP: true,),
+                          ),
+                        );
+                      },
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(
                           color: Color(0xFF0099FF),
