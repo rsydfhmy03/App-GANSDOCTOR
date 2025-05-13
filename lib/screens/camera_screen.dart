@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:gansdoctor/utils/constants.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gansdoctor/screens/result_screen.dart';
@@ -12,6 +13,7 @@ import 'package:gansdoctor/widgets/custom_loading_dialog.dart';
 class CameraScreen extends StatefulWidget {
   final bool useLBP;
   const CameraScreen({Key? key, required this.useLBP}) : super(key: key);
+
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
@@ -126,27 +128,6 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  // Future<void> _processImage() async {
-  //   if (imageFile == null) return;
-
-  //   CustomLoadingDialog.show(context);
-  //   try {
-  //     final result = await detectionService.detectFace(imageFile!);
-  //     if (!mounted) return;
-  //     CustomLoadingDialog.hide(context);
-  //     Navigator.of(
-  //       context,
-  //     ).push(MaterialPageRoute(builder: (_) => ResultScreen(result: result)));
-  //   } catch (e) {
-  //     if (!mounted) return;
-  //     CustomLoadingDialog.hide(context);
-  //     CustomAlertDialog.show(
-  //       context: context,
-  //       title: "Error",
-  //       message: "Proses deteksi gagal dilakukan",
-  //     );
-  //   }
-  // }
   Future<void> _processImage() async {
     if (imageFile == null) return;
 
@@ -182,6 +163,11 @@ class _CameraScreenState extends State<CameraScreen>
 
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(AppStrings.cameraScreen),
+        centerTitle: true,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: Stack(
           children: [
@@ -278,7 +264,7 @@ class _CameraScreenState extends State<CameraScreen>
                                   ),
                                 ),
                                 child: Text(
-                                  'Proses Gambar',
+                                  'Process Image',
                                   style: GoogleFonts.poppins(fontSize: 16),
                                 ),
                               ),
@@ -287,27 +273,48 @@ class _CameraScreenState extends State<CameraScreen>
                 ),
               ],
             ),
-            Positioned(
-              top: 16,
-              left: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5DCCFC),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF5DCCFC).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ),
+
+            // Tombol Back
+            // Positioned(
+            //   top: 16,
+            //   left: 16,
+            //   child: Container(
+            //     decoration: BoxDecoration(
+            //       color: const Color(0xFF5DCCFC),
+            //       borderRadius: BorderRadius.circular(12),
+            //       boxShadow: [
+            //         BoxShadow(
+            //           color: const Color(0xFF5DCCFC).withOpacity(0.3),
+            //           blurRadius: 8,
+            //           offset: const Offset(0, 4),
+            //         ),
+            //       ],
+            //     ),
+            //     child: IconButton(
+            //       icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+            //       onPressed: () => Navigator.pop(context),
+            //     ),
+            //   ),
+            // ),
+
+            // // Title di tengah atas (seperti AppBar)
+            // Positioned(
+            //   top: 16,
+            //   left: 0,
+            //   right: 0,
+            //   child: Center(
+            //     child: Text(
+            //       'Camera',
+            //       style: GoogleFonts.poppins(
+            //         fontSize: 20,
+            //         fontWeight: FontWeight.w600,
+            //         color: Colors.black87,
+            //       ),
+            //     ),
+            //   ),
+            // ),
+
+            // Tombol Flash
             Positioned(
               top: 16,
               right: 16,
