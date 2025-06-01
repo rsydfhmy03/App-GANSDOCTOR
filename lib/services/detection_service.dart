@@ -4,6 +4,29 @@ import 'package:dio/dio.dart';
 import 'package:gansdoctor/models/detection_result.dart';
 import 'package:gansdoctor/config/api_config.dart';
 
+enum DetectionErrorType {
+  noFaceDetected,
+  connectionError,
+  serverError,
+  invalidResponse,
+  unknown
+}
+
+class DetectionException implements Exception {
+  final DetectionErrorType type;
+  final String message;
+  final int? statusCode;
+
+  DetectionException({
+    required this.type,
+    required this.message,
+    this.statusCode,
+  });
+
+  @override
+  String toString() => message;
+}
+
 class DetectionService {
   final Dio _dio = Dio()
     ..interceptors.add(LogInterceptor(
@@ -53,21 +76,123 @@ class DetectionService {
           headers: {
             "Content-Type": "multipart/form-data",
           },
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
 
       print('[DETECT] Response status: ${response.statusCode}');
       print('[DETECT] Response data: ${response.data}');
 
+      // Handle success responses
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return DetectionResult.fromJson(response.data);
-      } else {
-        throw Exception('Failed to detect face: ${response.statusCode}');
+        try {
+          return DetectionResult.fromJson(response.data);
+        } catch (e) {
+          throw DetectionException(
+            type: DetectionErrorType.invalidResponse,
+            message: 'Response format tidak valid dari server',
+          );
+        }
       }
-    } catch (e, stacktrace) {
-      print('[DETECTION ERROR] $e');
-      print('[STACKTRACE] $stacktrace');
-      throw Exception('Error detecting face: $e');
+
+      // Handle specific error responses
+      if (response.statusCode == 404) {
+        final responseData = response.data;
+        if (responseData is Map<String, dynamic> && 
+            responseData['message']?.toString().toLowerCase().contains('face not detected') == true) {
+          throw DetectionException(
+            type: DetectionErrorType.noFaceDetected,
+            message: 'Wajah tidak terdeteksi dalam gambar',
+            statusCode: response.statusCode,
+          );
+        }
+      }
+
+      // Handle other HTTP errors
+      if (response.statusCode != null && response.statusCode! >= 400) {
+        throw DetectionException(
+          type: DetectionErrorType.serverError,
+          message: 'Server mengalami masalah, silakan coba lagi',
+          statusCode: response.statusCode,
+        );
+      }
+
+      // Fallback for unexpected status codes
+      throw DetectionException(
+        type: DetectionErrorType.unknown,
+        message: 'Terjadi kesalahan yang tidak diketahui',
+        statusCode: response.statusCode,
+      );
+
+    } on DioException catch (dioError) {
+      print('[DETECTION ERROR] DioException: ${dioError.type}');
+      print('[DETECTION ERROR] Message: ${dioError.message}');
+      
+      switch (dioError.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          throw DetectionException(
+            type: DetectionErrorType.connectionError,
+            message: 'Koneksi timeout, periksa jaringan internet Anda',
+          );
+          
+        case DioExceptionType.connectionError:
+          if (dioError.error is SocketException) {
+            final socketError = dioError.error as SocketException;
+            if (socketError.message.contains('Failed host lookup')) {
+              throw DetectionException(
+                type: DetectionErrorType.connectionError,
+                message: 'Tidak dapat terhubung ke server, periksa koneksi internet Anda',
+              );
+            }
+          }
+          throw DetectionException(
+            type: DetectionErrorType.connectionError,
+            message: 'Masalah koneksi jaringan, silakan coba lagi',
+          );
+          
+        case DioExceptionType.badResponse:
+          final statusCode = dioError.response?.statusCode;
+          if (statusCode == 404) {
+            final responseData = dioError.response?.data;
+            if (responseData is Map<String, dynamic> && 
+                responseData['message']?.toString().toLowerCase().contains('face not detected') == true) {
+              throw DetectionException(
+                type: DetectionErrorType.noFaceDetected,
+                message: 'Wajah tidak terdeteksi dalam gambar',
+                statusCode: statusCode,
+              );
+            }
+          }
+          throw DetectionException(
+            type: DetectionErrorType.serverError,
+            message: 'Server mengalami masalah, silakan coba lagi',
+            statusCode: statusCode,
+          );
+          
+        case DioExceptionType.cancel:
+          throw DetectionException(
+            type: DetectionErrorType.unknown,
+            message: 'Permintaan dibatalkan',
+          );
+          
+        default:
+          throw DetectionException(
+            type: DetectionErrorType.unknown,
+            message: 'Terjadi kesalahan yang tidak diketahui',
+          );
+      }
+    } catch (e) {
+      if (e is DetectionException) {
+        rethrow;
+      }
+      
+      print('[DETECTION ERROR] Unexpected error: $e');
+      throw DetectionException(
+        type: DetectionErrorType.unknown,
+        message: 'Terjadi kesalahan yang tidak diketahui',
+      );
     }
   }
 }
