@@ -1,64 +1,107 @@
-// Refactored CameraScreen with flash toggle, better layout & design sync
-
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:gansdoctor/utils/constants.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gansdoctor/screens/result_screen.dart';
-import 'package:gansdoctor/services/detection_service.dart';
-import 'package:gansdoctor/utils/helpers.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:gansdoctor/screens/image_preview_screen.dart';
+import 'package:gansdoctor/widgets/custom_alert_dialog.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({Key? key}) : super(key: key);
+  final bool useLBP;
+  const CameraScreen({Key? key, required this.useLBP}) : super(key: key);
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   List<CameraDescription>? cameras;
   CameraController? controller;
   bool isCameraReady = false;
   bool isRearCameraSelected = false;
   bool flashEnabled = false;
-  File? imageFile;
 
   final ImagePicker _picker = ImagePicker();
-  final DetectionService detectionService = DetectionService();
+
+  // Animation controllers
+  late AnimationController _fabAnimationController;
+  late Animation<double> _fabScaleAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initializeAnimations();
     initializeCamera();
   }
 
+  void _initializeAnimations() {
+    _fabAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+
+    _fabScaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
+      CurvedAnimation(parent: _fabAnimationController, curve: Curves.easeInOut),
+    );
+  }
+
   Future<void> initializeCamera() async {
-    cameras = await availableCameras();
-    if (cameras != null && cameras!.isNotEmpty) {
-      int selectedCamera = cameras!.indexWhere((c) => c.lensDirection == CameraLensDirection.front);
-      if (selectedCamera == -1) selectedCamera = 0;
-      await onNewCameraSelected(cameras![selectedCamera]);
+    try {
+      cameras = await availableCameras();
+      if (cameras != null && cameras!.isNotEmpty) {
+        int selectedCamera = cameras!.indexWhere(
+          (c) => c.lensDirection == CameraLensDirection.front,
+        );
+        if (selectedCamera == -1) selectedCamera = 0;
+        await onNewCameraSelected(cameras![selectedCamera]);
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomAlertDialog.show(
+          context: context,
+          title: "Camera Error",
+          message: "Gagal mengakses kamera. Pastikan aplikasi memiliki izin kamera.",
+          type: AlertType.error,
+        );
+      }
     }
   }
 
   Future<void> onNewCameraSelected(CameraDescription cameraDescription) async {
-    if (controller != null) await controller!.dispose();
-
-    controller = CameraController(
-      cameraDescription,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-
     try {
+      if (controller != null) {
+        // Turn off flash before disposing camera
+        if (flashEnabled) {
+          await controller!.setFlashMode(FlashMode.off);
+          setState(() => flashEnabled = false);
+        }
+        await controller!.dispose();
+      }
+      
+      controller = CameraController(
+        cameraDescription,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
       await controller!.initialize();
-      setState(() => isCameraReady = true);
+      if (mounted) {
+        setState(() => isCameraReady = true);
+      }
     } catch (e) {
-      Helpers.showSnackBar(context, 'Camera error: $e');
+      if (mounted) {
+        CustomAlertDialog.show(
+          context: context,
+          title: "Gagal Inisialisasi",
+          message: "Kamera tidak bisa digunakan. Silakan restart aplikasi.",
+          type: AlertType.error,
+        );
+      }
     }
   }
 
@@ -67,152 +110,155 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     flashEnabled = !flashEnabled;
     controller!.setFlashMode(flashEnabled ? FlashMode.torch : FlashMode.off);
     setState(() {});
+    HapticFeedback.lightImpact();
   }
 
-  void _switchCamera() async {
+  Future<void> _switchCamera() async {
     if (cameras == null || cameras!.isEmpty) return;
+
+    HapticFeedback.mediumImpact();
+
     isRearCameraSelected = !isRearCameraSelected;
     int selected = isRearCameraSelected
         ? cameras!.indexWhere((c) => c.lensDirection == CameraLensDirection.back)
         : cameras!.indexWhere((c) => c.lensDirection == CameraLensDirection.front);
+    
     if (selected == -1) selected = 0;
     await onNewCameraSelected(cameras![selected]);
   }
 
   Future<void> takePicture() async {
     if (!controller!.value.isInitialized) return;
+
+    _fabAnimationController.forward().then((_) {
+      _fabAnimationController.reverse();
+    });
+    HapticFeedback.mediumImpact();
+
     try {
+      // Turn off flash before taking picture
+      if (flashEnabled) {
+        await controller!.setFlashMode(FlashMode.off);
+        setState(() => flashEnabled = false);
+      }
+
       final file = await controller!.takePicture();
-      setState(() => imageFile = File(file.path));
+      
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ImagePreviewScreen(
+              imageFile: File(file.path),
+              useLBP: widget.useLBP,
+            ),
+          ),
+        );
+      }
     } catch (e) {
-      Helpers.showSnackBar(context, 'Failed to take picture: $e');
+      if (mounted) {
+        CustomAlertDialog.show(
+          context: context,
+          title: "Gagal Mengambil Foto",
+          message: "Terjadi kesalahan saat mengambil foto. Silakan coba lagi.",
+          type: AlertType.error,
+        );
+      }
     }
   }
 
   Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => imageFile = File(picked.path));
-  }
-
-  Future<void> _processImage() async {
-    if (imageFile == null) return;
-    Helpers.showLoadingDialog(context);
     try {
-      final result = await detectionService.detectFace(imageFile!);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ResultScreen(imageFile: imageFile!, result: result),
-        ),
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1920,
       );
+      
+      if (picked != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ImagePreviewScreen(
+              imageFile: File(picked.path),
+              useLBP: widget.useLBP,
+            ),
+          ),
+        );
+        HapticFeedback.lightImpact();
+      }
     } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      Helpers.showSnackBar(context, 'Detection failed: $e');
+      if (mounted) {
+        CustomAlertDialog.show(
+          context: context,
+          title: "Galeri Error",
+          message: "Gagal mengambil gambar dari galeri. Periksa izin aplikasi.",
+          type: AlertType.error,
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!isCameraReady || controller == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return _buildLoadingScreen();
     }
 
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          AppStrings.cameraScreen,
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+        elevation: 0,
+      ),
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: imageFile == null
-                          ? CameraPreview(controller!)
-                          : Stack(
-                              children: [
-                                Image.file(imageFile!, fit: BoxFit.cover, width: double.infinity),
-                                Positioned(
-                                  top: 16,
-                                  right: 16,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                                    onPressed: () => setState(() => imageFile = null),
-                                  ),
-                                )
-                              ],
-                            ),
-                    ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    children: [
+                      CameraPreview(controller!),
+                      _buildFlashToggle(),
+                      _buildMethodIndicator(),
+                    ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: imageFile == null
-                        ? [
-                            IconButton(
-                              icon: const Icon(Icons.photo_library, size: 32),
-                              onPressed: _pickImage,
-                            ),
-                            GestureDetector(
-                              onTap: takePicture,
-                              child: Container(
-                                height: 75,
-                                width: 75,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF5DCCFC),
-                                  border: Border.all(color: Colors.white, width: 4),
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.flip_camera_ios, size: 32),
-                              onPressed: _switchCamera,
-                            ),
-                          ]
-                        : [
-                            ElevatedButton(
-                              onPressed: _processImage,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF5DCCFC),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                              ),
-                              child: Text('Proses Gambar', style: GoogleFonts.poppins(fontSize: 16)),
-                            ),
-                          ],
-                  ),
-                ),
-              ],
-            ),
-            Positioned(
-              top: 16,
-              left: 16,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.blue, size: 28),
-                onPressed: () => Navigator.pop(context),
               ),
             ),
-            Positioned(
-              top: 16,
-              right: 16,
-              child: IconButton(
-                icon: Icon(
-                  flashEnabled ? Icons.flash_on : Icons.flash_off,
-                  color: Colors.blue,
-                  size: 28,
-                ),
-                onPressed: toggleFlash,
+            const SizedBox(height: 12),
+            _buildCameraControls(),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5DCCFC)),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Memuat Kamera...',
+              style: GoogleFonts.poppins(
+                color: Colors.blueAccent,
+                fontSize: 16,
               ),
             ),
           ],
@@ -221,16 +267,162 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     );
   }
 
+  Widget _buildFlashToggle() {
+    return Positioned(
+      top: 16,
+      left: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withOpacity(0.7),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          icon: Icon(
+            flashEnabled ? Icons.flash_on : Icons.flash_off,
+            color: flashEnabled ? Colors.yellow : Colors.white,
+          ),
+          onPressed: toggleFlash,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMethodIndicator() {
+    return Positioned(
+      top: 16,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            widget.useLBP ? 'LBP + CNN' : 'CNN Standard',
+            style: GoogleFonts.poppins(
+              color: Colors.blue,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraControls() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildControlButton(
+            icon: Icons.photo_library_outlined,
+            onPressed: _pickImage,
+          ),
+          _buildCaptureButton(),
+          _buildControlButton(
+            icon: Icons.flip_camera_ios_outlined,
+            onPressed: _switchCamera,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlButton({required IconData icon, required VoidCallback onPressed}) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Colors.grey[800]!, Colors.grey[700]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 28, color: Colors.white),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
+  Widget _buildCaptureButton() {
+    return GestureDetector(
+      onTap: takePicture,
+      child: AnimatedBuilder(
+        animation: _fabScaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _fabScaleAnimation.value,
+            child: Container(
+              height: 80,
+              width: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF5DCCFC), width: 4),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5DCCFC).withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Container(
+                  height: 60,
+                  width: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [const Color(0xFF5DCCFC), const Color(0xFF0099FF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Turn off flash before disposing
+    if (controller != null && flashEnabled) {
+      controller!.setFlashMode(FlashMode.off);
+    }
     controller?.dispose();
+    _fabAnimationController.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (controller == null || !controller!.value.isInitialized) return;
+
     if (state == AppLifecycleState.inactive) {
       controller?.dispose();
     } else if (state == AppLifecycleState.resumed) {
